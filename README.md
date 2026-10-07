@@ -26,14 +26,15 @@ Hecha con **Python + Flask + SQLite**. El calendario usa **flatpickr**.
 
 | Quién | Qué puede hacer |
 |---|---|
-| **Administradora** (panel `/admin`) | Dar de alta autolavados con el email de su encargado, dar de alta o de baja empleados, ver todas las solicitudes, filtrarlas y aprobarlas o rechazarlas. |
-| **Empleado** (página principal `/`) | Identificarse con su email, ver el calendario de su autolavado con los días ocupados y pedir vacaciones. |
+| **Administradora** (panel `/admin`) | Dar de alta autolavados con el email de su encargado, dar de alta o de baja empleados, fijar los días de vacaciones al año de cada uno y ver cuántos le quedan, ver todas las solicitudes, filtrarlas y aprobarlas o rechazarlas. |
+| **Empleado** (página principal `/`) | Identificarse con su email, pedir vacaciones en un calendario que bloquea los días ocupados y ver su panel *Mis vacaciones*: días disponibles, calendario del año, sus solicitudes y los días no disponibles. |
 | **Encargado** (enlace del email) | Recibir un email por cada solicitud nueva y aprobarla o rechazarla desde el enlace, sin entrar al panel. |
 
 Además:
 - Las fechas solo **chocan entre empleados del mismo autolavado**.
 - El empleado recibe un **email con el resultado** cuando se aprueba o se rechaza su solicitud.
 - El calendario **sombrea los días no disponibles**: en gris los de compañeros, en naranja los propios pendientes y en verde los propios aprobados.
+- Cada empleado tiene unos **días de vacaciones al año** (28 por defecto) y **no puede pedir más de los que le quedan**.
 
 ---
 
@@ -113,7 +114,7 @@ Para enviarlos de verdad:
 
 4. **Reinicia el servidor**, porque el `.env` solo se lee al arrancar.
 
-> Mientras la app esté en `127.0.0.1`, el enlace del email **solo se puede abrir desde este ordenador**. Para que el encargado pueda abrirlo desde su móvil, la app tiene que estar publicada en internet y `BASE_URL` tiene que tener la dirección pública. Ver [Pendiente](#11-pendiente).
+> Mientras la app esté en `127.0.0.1`, el enlace del email **solo se puede abrir desde este ordenador**. Para que el encargado pueda abrirlo desde su móvil, la app tiene que estar publicada en internet y `BASE_URL` tiene que tener la dirección pública.
 
 ---
 
@@ -122,15 +123,34 @@ Para enviarlos de verdad:
 ### Administradora: configuración inicial (en `/admin`)
 
 1. **Autolavados**: escribe el nombre y el email del encargado y pulsa **Añadir**. Se pueden editar después y pulsar **Guardar**.
-2. **Empleados**: escribe el nombre y el email, elige el autolavado y pulsa **Añadir**.
+2. **Empleados**: escribe el nombre y el email, elige el autolavado, indica los **días al año** (28 por defecto) y pulsa **Añadir**.
+   - La columna **Disponibles** muestra cuántos días le quedan este año, por ejemplo *21 de 28*.
+   - Los días al año se pueden cambiar en cualquier momento, por ejemplo para alguien a media jornada o que entró a mitad de año.
    - Si un empleado **cambia de autolavado**, elige el nuevo en la lista desplegable y pulsa **Guardar**.
    - Si un empleado **se va**, desmarca *Activo* y pulsa **Guardar**. Ya no podrá pedir vacaciones, pero su historial se conserva. Los empleados dados de baja aparecen en gris.
 
 ### Empleado: pedir vacaciones (en `/`)
 
-1. Escribe su email y pulsa **Continuar**.
-2. Ve *"Hola Ana · Centro"* y el calendario de su autolavado con los días ocupados sombreados.
+1. Escribe su email y pulsa **Continuar** (o **Enter**).
+2. Debajo del email aparecen su nombre y su autolavado, y el selector de fechas, que no deja elegir días ocupados.
 3. Elige el rango de fechas y pulsa **Enviar solicitud**. Si solo elige un día, ese día cuenta como inicio y fin.
+4. A la derecha (debajo en el móvil) ve el panel **Mis vacaciones**:
+   - **Contadores:** días disponibles (el dato destacado), días al año, aprobados y pendientes.
+   - **Barra de progreso:** *"Has usado 7 de 28 días · te quedan 21"*.
+   - **Calendario del año**, con los 12 meses y estos colores:
+
+     | Color | Significado |
+     |---|---|
+     | Verde | Sus vacaciones aprobadas |
+     | Naranja | Sus vacaciones pendientes |
+     | Rosa tachado | Sus solicitudes rechazadas |
+     | Gris con rayas | **No disponible**: lo ha cogido un compañero de su autolavado |
+     | Gris claro | Días ya pasados |
+     | Recuadro azul | Hoy |
+
+   - **Mis solicitudes:** lista con fechas, días, estado y comentario del encargado.
+   - **Días no disponibles:** lista de las fechas que ya han cogido compañeros de su autolavado. No muestra nombres.
+   - Las flechas **‹ 2026 ›** cambian de año.
 
 ### Encargado: aprobar o rechazar
 
@@ -219,6 +239,45 @@ Requisito: que la amiga pueda dar de alta autolavados **y empleados** desde la w
 
 Se creó este `README.md` y el notebook `Documentacion.ipynb`.
 
+### Paso 10: Repositorio propio en git
+
+- La carpeta del proyecto estaba dentro del repositorio git del Escritorio, que tiene documentos personales y está conectado a GitHub. Se creó un **repositorio independiente** (`git init -b main`) solo para `Vacaciones/Vacaciones`.
+- Se comprobó que el primer commit solo incluye los archivos del proyecto: ni `.env`, ni `vacaciones.db`, ni `__pycache__`.
+- Para subirlo a GitHub: crear un repositorio **vacío** en https://github.com/new y después ejecutar:
+  ```powershell
+  git remote add origin https://github.com/USUARIO/REPO.git
+  git push -u origin main
+  ```
+
+### Paso 11: Configuración real del correo
+
+- **Problema 1:** los datos del correo se habían escrito en `.env.ejemplo`. La app no lee ese archivo, y además se sube a git, así que la contraseña se habría publicado. Se pasaron a `.env`, que está ignorado, y `.env.ejemplo` volvió a ser la plantilla.
+- **Problema 2:** Gmail cortaba la conexión al iniciar sesión porque se usaba la contraseña normal de la cuenta. Se creó una **contraseña de aplicación** (16 letras).
+- **Resultado:** se probó el inicio de sesión y se envió un correo de prueba. Después se reinició el servidor para que leyera el `.env`.
+
+### Paso 12: Formulario de solicitud más profesional
+
+- Una sola tarjeta: el título *Solicitar vacaciones* y el campo **Tu email** con el botón **Continuar** al lado.
+- Al reconocer el email, aparecen debajo el nombre del empleado con su autolavado en una etiqueta y el selector de fechas.
+- Se quitaron "Hola" y "¿No eres tú?". Si se cambia el email, el paso de fechas se oculta solo y vuelve a salir *Continuar*.
+- Se corrigió un fallo: las reglas `display: flex` del CSS anulaban el atributo `hidden`. Se añadió `[hidden] { display: none !important; }`.
+
+### Paso 13: Panel "Mis vacaciones" y días anuales
+
+- Columna nueva `empleados.dias_anuales` (28 por defecto), añadida con migración automática. Se edita en el panel, donde también se ve la columna *Disponibles*.
+- Funciones `dias_por_anio()`, que reparte un rango que cruza el fin de año, y `dias_usados()`, que suma los días aprobados y pendientes de un empleado en un año.
+- Endpoint nuevo `GET /api/resumen?email=&anio=`.
+- **Límite:** al crear una solicitud se comprueba, para cada año que toca, que no supere los días que quedan. La comprobación va dentro de la misma transacción que el solapamiento.
+- Panel lateral con contadores, barra de progreso, calendario anual de 12 meses, leyenda, lista de solicitudes y selector de año.
+- Se cuentan **días naturales**. Falta confirmar con la administradora si deben ser laborables.
+
+### Paso 14: Días no disponibles en el panel
+
+- El calendario anual pinta en **gris con rayas** los días cogidos por compañeros del mismo autolavado (pendientes o aprobados), y en gris claro los días pasados.
+- Si un día es a la vez del empleado y de un compañero, se ve el estado propio.
+- Sección nueva **Días no disponibles** con la lista de fechas futuras bloqueadas. No muestra nombres de compañeros, por privacidad.
+- Se reutiliza `/api/ocupadas`, que ya marca con `propia` lo que es del propio empleado.
+
 ---
 
 ## 7. Base de datos
@@ -233,7 +292,7 @@ nombre  (único)            nombre                       empleado        (copia 
 email_encargado            email  (único, minúsculas)   email           (copia del email)
                            autolavado_id → autolavados  fecha_inicio    YYYY-MM-DD
                            activo  (1/0)                fecha_fin       YYYY-MM-DD
-                                                        estado          Pendiente | Aprobada | Rechazada
+                           dias_anuales  (28)           estado          Pendiente | Aprobada | Rechazada
                                                         comentario
                                                         creada
                                                         autolavado_id → autolavados
@@ -259,16 +318,17 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "mensaje"}
 | GET | `/api/autolavados` | Lista de autolavados |
 | POST | `/api/autolavados` | Crear `{nombre, email_encargado}` |
 | PUT | `/api/autolavados/<id>` | Editar `{nombre, email_encargado}` |
-| GET | `/api/empleados` | Lista de empleados |
-| POST | `/api/empleados` | Crear `{nombre, email, autolavado_id}` |
-| PUT | `/api/empleados/<id>` | Editar `{nombre, email, autolavado_id, activo}` |
+| GET | `/api/empleados` | Lista de empleados con `dias_anuales` y `disponibles` del año actual |
+| POST | `/api/empleados` | Crear `{nombre, email, autolavado_id, dias_anuales?}` |
+| PUT | `/api/empleados/<id>` | Editar `{nombre, email, autolavado_id, activo, dias_anuales}` |
 | GET | `/api/identificar?email=` | Reconoce a un empleado activo y devuelve `{nombre, autolavado_id, autolavado}` |
+| GET | `/api/resumen?email=&anio=` | Panel *Mis vacaciones*: `{anio, dias_anuales, aprobados, pendientes, disponibles, solicitudes[]}` |
 | GET | `/api/ocupadas?autolavado=&email=` | Rangos ocupados del autolavado `[{from, to, estado, propia}]` |
 | GET | `/api/solicitudes` | Todas las solicitudes (sin el token) |
 | POST | `/api/solicitudes` | Crear `{email, fecha_inicio, fecha_fin}` |
 | POST | `/api/solicitudes/<id>/estado` | Resolver `{estado: "Aprobada" \| "Rechazada", comentario}` |
 
-Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404` no encontrado, `409` solapamiento, nombre o email duplicado, o solicitud que ya no está pendiente.
+Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404` no encontrado, `409` solapamiento, días insuficientes, nombre o email duplicado, o solicitud que ya no está pendiente.
 
 ---
 
@@ -277,7 +337,10 @@ Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404`
 - Solo pueden pedir vacaciones los **empleados activos** dados de alta.
 - No se pueden pedir **fechas pasadas** ni rangos con el inicio posterior al fin.
 - Una solicitud **choca** con otra si es del **mismo autolavado**, está *Pendiente* o *Aprobada* y comparte al menos un día.
-- Las solicitudes *Rechazadas* **liberan** sus días.
+- Las solicitudes *Rechazadas* **liberan** sus días, tanto en el calendario como en el contador de días disponibles.
+- Cada empleado tiene `dias_anuales` días por año natural (28 por defecto). **Disponibles = días al año − aprobados − pendientes.** No se puede pedir más de lo disponible.
+- Los días se cuentan como **días naturales**, incluidos fines de semana y festivos.
+- Una solicitud que cruza el fin de año descuenta los días de cada año por separado. Por ejemplo, del 29/12 al 03/01 son 3 días de un año y 3 del siguiente.
 - Solo se pueden resolver solicitudes *Pendientes*. Una vez aprobada o rechazada, no se puede cambiar.
 - Los emails de empleados se guardan en minúsculas, así que da igual cómo se escriban.
 
@@ -291,6 +354,8 @@ Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404`
 | La solicitud no se envía o sale "Error del servidor" | El servidor quedó con código antiguo tras un cambio | `Ctrl+C` y vuelve a arrancar |
 | No llegan los correos | Falta el `.env`, o la contraseña es la normal de Gmail | Ver [sección 4](#4-configurar-el-envío-de-correos) y mira en la carpeta de spam |
 | "Ese email no está dado de alta" | El empleado no existe o está inactivo | Dalo de alta o actívalo en `/admin` |
+| "Pides N días… solo te quedan M" | El empleado ya ha gastado sus días del año | Revisa sus días al año en `/admin` o rechaza alguna solicitud pendiente |
+| Gmail corta la conexión al iniciar sesión | Se está usando la contraseña normal de Gmail | Usa una contraseña de aplicación (ver sección 4) |
 | El enlace del email no abre en el móvil | La app está en `127.0.0.1` | Publicar la app y poner la dirección pública en `BASE_URL` |
 | Error `Address already in use` | Ya hay otro servidor en el puerto 5000 | Cierra el otro servidor |
 

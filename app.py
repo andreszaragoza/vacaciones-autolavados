@@ -4,7 +4,7 @@ import secrets
 import smtplib
 import sqlite3
 import threading
-from datetime import date
+from datetime import date, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -25,6 +25,7 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
 MAIL_FROM = os.environ.get("MAIL_FROM") or SMTP_USER
 
 ESTADOS_ACTIVOS = ("Pendiente", "Aprobada")
+DIAS_ANUALES_DEFECTO = 28
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -57,7 +58,8 @@ def init_db():
             nombre TEXT NOT NULL,
             email TEXT NOT NULL UNIQUE,   -- siempre en minúsculas
             autolavado_id INTEGER NOT NULL REFERENCES autolavados(id),
-            activo INTEGER NOT NULL DEFAULT 1
+            activo INTEGER NOT NULL DEFAULT 1,
+            dias_anuales INTEGER NOT NULL DEFAULT 28   -- días de vacaciones por año
         )
     """)
     con.execute("""
@@ -83,6 +85,9 @@ def init_db():
         con.execute("ALTER TABLE solicitudes ADD COLUMN token TEXT")
     if "empleado_id" not in columnas:
         con.execute("ALTER TABLE solicitudes ADD COLUMN empleado_id INTEGER REFERENCES empleados(id)")
+    columnas = {r[1] for r in con.execute("PRAGMA table_info(empleados)")}
+    if "dias_anuales" not in columnas:
+        con.execute(f"ALTER TABLE empleados ADD COLUMN dias_anuales INTEGER NOT NULL DEFAULT {DIAS_ANUALES_DEFECTO}")
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitudes_token ON solicitudes(token)")
     con.commit()
     con.close()
@@ -109,6 +114,30 @@ def fmt_fecha(iso):
 
 def dias(inicio, fin):
     return (date.fromisoformat(fin) - date.fromisoformat(inicio)).days + 1
+
+
+def dias_por_anio(inicio, fin):
+    """{año: días} de un rango. Un rango puede cruzar el fin de año."""
+    res = {}
+    a, b = date.fromisoformat(inicio), date.fromisoformat(fin)
+    while a <= b:
+        tope = min(b, date(a.year, 12, 31))
+        res[a.year] = res.get(a.year, 0) + (tope - a).days + 1
+        a = tope + timedelta(days=1)
+    return res
+
+
+def dias_usados(empleado_id, anio):
+    """Días aprobados y pendientes de un empleado en un año."""
+    rows = get_db().execute(
+        "SELECT fecha_inicio, fecha_fin, estado FROM solicitudes "
+        "WHERE empleado_id = ? AND estado IN (?, ?) AND fecha_inicio <= ? AND fecha_fin >= ?",
+        (empleado_id, *ESTADOS_ACTIVOS, f"{anio}-12-31", f"{anio}-01-01"),
+    ).fetchall()
+    usados = {"Aprobada": 0, "Pendiente": 0}
+    for r in rows:
+        usados[r["estado"]] += dias_por_anio(r["fecha_inicio"], r["fecha_fin"]).get(anio, 0)
+    return usados
 
 
 # ---------- Email ----------
@@ -296,6 +325,10 @@ def datos_empleado():
         aid = int(datos.get("autolavado_id"))
     except (TypeError, ValueError):
         aid = None
+    try:
+        dias_anuales = int(datos.get("dias_anuales", DIAS_ANUALES_DEFECTO))
+    except (TypeError, ValueError):
+        dias_anuales = -1
 
     if not nombre:
         return None, "El nombre del empleado es obligatorio."
@@ -303,7 +336,9 @@ def datos_empleado():
         return None, "El email del empleado no es válido."
     if aid is None or not get_db().execute("SELECT 1 FROM autolavados WHERE id = ?", (aid,)).fetchone():
         return None, "Elige un autolavado válido."
-    return (nombre, email, aid, activo), None
+    if not 0 <= dias_anuales <= 366:
+        return None, "Los días de vacaciones al año deben estar entre 0 y 366."
+    return (nombre, email, aid, activo, dias_anuales), None
 
 
 @app.route("/api/empleados", methods=["GET"])
@@ -313,7 +348,12 @@ def listar_empleados():
         "JOIN autolavados a ON a.id = e.autolavado_id "
         "ORDER BY e.activo DESC, a.nombre, e.nombre"
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    anio = date.today().year
+    lista = []
+    for r in rows:
+        u = dias_usados(r["id"], anio)
+        lista.append({**dict(r), "disponibles": max(r["dias_anuales"] - u["Aprobada"] - u["Pendiente"], 0)})
+    return jsonify(lista)
 
 
 @app.route("/api/empleados", methods=["POST"])
@@ -324,7 +364,8 @@ def crear_empleado():
     db = get_db()
     try:
         cur = db.execute(
-            "INSERT INTO empleados (nombre, email, autolavado_id, activo) VALUES (?, ?, ?, ?)", valores)
+            "INSERT INTO empleados (nombre, email, autolavado_id, activo, dias_anuales) "
+            "VALUES (?, ?, ?, ?, ?)", valores)
         db.commit()
     except sqlite3.IntegrityError:
         return error("Ya existe un empleado con ese email.", 409)
@@ -339,7 +380,8 @@ def editar_empleado(eid):
     db = get_db()
     try:
         cur = db.execute(
-            "UPDATE empleados SET nombre = ?, email = ?, autolavado_id = ?, activo = ? WHERE id = ?",
+            "UPDATE empleados SET nombre = ?, email = ?, autolavado_id = ?, activo = ?, dias_anuales = ? "
+            "WHERE id = ?",
             (*valores, eid))
         db.commit()
     except sqlite3.IntegrityError:
@@ -357,6 +399,34 @@ def identificar():
         return error("Ese email no está dado de alta. Pide a tu encargado que te añada.", 404)
     return jsonify({"nombre": e["nombre"], "autolavado_id": e["autolavado_id"],
                     "autolavado": e["autolavado"]})
+
+
+@app.route("/api/resumen")
+def resumen():
+    """Panel "Mis vacaciones": contadores y solicitudes del empleado en un año."""
+    e = buscar_empleado(request.args.get("email"))
+    if not e:
+        return error("Ese email no está dado de alta.", 404)
+    anio = request.args.get("anio", type=int) or date.today().year
+
+    rows = get_db().execute(
+        "SELECT id, fecha_inicio, fecha_fin, estado, comentario FROM solicitudes "
+        "WHERE empleado_id = ? AND fecha_inicio <= ? AND fecha_fin >= ? ORDER BY fecha_inicio",
+        (e["id"], f"{anio}-12-31", f"{anio}-01-01"),
+    ).fetchall()
+    u = dias_usados(e["id"], anio)
+    return jsonify({
+        "anio": anio,
+        "dias_anuales": e["dias_anuales"],
+        "aprobados": u["Aprobada"],
+        "pendientes": u["Pendiente"],
+        "disponibles": max(e["dias_anuales"] - u["Aprobada"] - u["Pendiente"], 0),
+        "solicitudes": [{
+            "id": r["id"], "from": r["fecha_inicio"], "to": r["fecha_fin"],
+            "estado": r["estado"], "comentario": r["comentario"],
+            "dias": dias_por_anio(r["fecha_inicio"], r["fecha_fin"]).get(anio, 0),
+        } for r in rows],
+    })
 
 
 # ---------- API: solicitudes ----------
@@ -418,6 +488,14 @@ def crear_solicitud():
         if choque:
             db.rollback()
             return error("Esas fechas se solapan con otro compañero de tu autolavado.", 409)
+
+        # No puede pasarse de sus días anuales (las pendientes ya cuentan)
+        for anio, n in dias_por_anio(inicio.isoformat(), fin.isoformat()).items():
+            u = dias_usados(emp["id"], anio)
+            quedan = max(emp["dias_anuales"] - u["Aprobada"] - u["Pendiente"], 0)
+            if n > quedan:
+                db.rollback()
+                return error(f"Pides {n} días en {anio}, pero solo te quedan {quedan}.", 409)
 
         cur = db.execute(
             "INSERT INTO solicitudes "

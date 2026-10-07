@@ -38,7 +38,7 @@
 <div class="tabla-wrap">
   <table>
     <thead>
-      <tr><th>Nombre</th><th>Email</th><th>Autolavado</th><th>Activo</th><th></th></tr>
+      <tr><th>Nombre</th><th>Email</th><th>Autolavado</th><th>Días/año</th><th>Disponibles</th><th>Activo</th><th></th></tr>
     </thead>
     <tbody id="filas-empleados"></tbody>
     <tfoot>
@@ -46,6 +46,8 @@
         <td><input id="emp-nombre" placeholder="Nombre y apellidos"></td>
         <td><input id="emp-email" type="email" placeholder="empleado@ejemplo.com"></td>
         <td><select id="emp-autolavado"></select></td>
+        <td><input id="emp-dias" type="number" min="0" max="366" value="28" class="num-dias"></td>
+        <td></td>
         <td></td>
         <td><button id="btn-anadir-emp">Añadir</button></td>
       </tr>
@@ -152,6 +154,7 @@
     const { ok, json } = await enviarJSON(`/api/solicitudes/${id}/estado`, "POST", { estado, comentario });
     if (!ok) window.alert(json.error || "Error al actualizar.");
     cargar();
+    cargarEmpleados();   // al rechazar se liberan días disponibles
   }
 
   function avisoAutolavados(texto, ok) {
@@ -192,17 +195,21 @@
       const nombre = Object.assign(document.createElement("input"), { value: e.nombre });
       const email = Object.assign(document.createElement("input"), { value: e.email, type: "email" });
       const lavado = selectAutolavado(e.autolavado_id);
+      const diasAnuales = Object.assign(document.createElement("input"),
+        { type: "number", min: 0, max: 366, value: e.dias_anuales, className: "num-dias" });
+      const disponibles = Object.assign(document.createElement("span"),
+        { textContent: `${e.disponibles} de ${e.dias_anuales}`, className: "disponibles" });
       const activo = Object.assign(document.createElement("input"), { type: "checkbox", checked: !!e.activo });
       const btn = Object.assign(document.createElement("button"), { textContent: "Guardar" });
       btn.onclick = async () => {
         const { ok, json } = await enviarJSON(`/api/empleados/${e.id}`, "PUT", {
-          nombre: nombre.value, email: email.value,
-          autolavado_id: lavado.value, activo: activo.checked,
+          nombre: nombre.value, email: email.value, autolavado_id: lavado.value,
+          dias_anuales: diasAnuales.value, activo: activo.checked,
         });
         avisoEmpleados(ok ? "Cambios guardados." : json.error, ok);
         cargarEmpleados();
       };
-      for (const el of [nombre, email, lavado, activo, btn]) {
+      for (const el of [nombre, email, lavado, diasAnuales, disponibles, activo, btn]) {
         const td = document.createElement("td");
         td.append(el);
         tr.append(td);
@@ -215,8 +222,10 @@
     const nombre = document.getElementById("emp-nombre");
     const email = document.getElementById("emp-email");
     if (!autolavados.length) return avisoEmpleados("Primero añade un autolavado.", false);
-    const { ok, json } = await enviarJSON("/api/empleados", "POST",
-      { nombre: nombre.value, email: email.value, autolavado_id: empAutolavado.value });
+    const { ok, json } = await enviarJSON("/api/empleados", "POST", {
+      nombre: nombre.value, email: email.value, autolavado_id: empAutolavado.value,
+      dias_anuales: document.getElementById("emp-dias").value,
+    });
     avisoEmpleados(ok ? "Empleado añadido." : json.error, ok);
     if (ok) { nombre.value = ""; email.value = ""; }
     cargarEmpleados();

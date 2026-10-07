@@ -2,50 +2,118 @@
 {% block title %}Solicitar vacaciones{% endblock %}
 
 {% block content %}
-<h1>Solicitar vacaciones</h1>
+<div class="layout-solicitud">
+  <form id="form-solicitud" class="tarjeta">
+    <h1>Solicitar vacaciones</h1>
 
-<!-- Paso 1: el empleado se identifica con su email -->
-<form id="form-email" class="tarjeta">
-  <label>Tu email
-    <input name="email" type="email" required autocomplete="email">
-  </label>
-  <button type="submit">Continuar</button>
-  <p id="mensaje-email" class="err" role="status"></p>
-</form>
+    <!-- Paso 1: el empleado se identifica con su email -->
+    <label>Tu email
+      <span class="fila-email">
+        <input name="email" type="email" required autocomplete="email" placeholder="nombre@ejemplo.com">
+        <button type="button" id="btn-continuar">Continuar</button>
+      </span>
+    </label>
+    <p id="mensaje-email" class="err" role="status"></p>
 
-<!-- Paso 2: elige las fechas en el calendario de su autolavado -->
-<form id="form-solicitud" class="tarjeta" hidden>
-  <p class="saludo">
-    Hola <strong id="nombre"></strong> · <span id="autolavado"></span><br>
-    <a href="#" id="cambiar">¿No eres tú?</a>
-  </p>
-  <label>Fechas
-    <input id="fechas" placeholder="Elige inicio y fin" required>
-  </label>
-  <ul class="leyenda">
-    <li><span class="muestra ocupado"></span> Cogido por un compañero</li>
-    <li><span class="muestra propio-pendiente"></span> Tus vacaciones pendientes</li>
-    <li><span class="muestra propio-aprobada"></span> Tus vacaciones aprobadas</li>
-  </ul>
-  <button type="submit">Enviar solicitud</button>
-  <p id="mensaje" role="status"></p>
-</form>
+    <!-- Paso 2: aparece al reconocer el email -->
+    <div id="paso-fechas" class="paso" hidden>
+      <p class="identidad">
+        <strong id="nombre"></strong>
+        <span class="etiqueta" id="autolavado"></span>
+      </p>
+      <label>Fechas
+        <input id="fechas" placeholder="Elige inicio y fin">
+      </label>
+      <ul class="leyenda">
+        <li><span class="muestra ocupado"></span> Cogido por un compañero</li>
+        <li><span class="muestra propio-pendiente"></span> Tus vacaciones pendientes</li>
+        <li><span class="muestra propio-aprobada"></span> Tus vacaciones aprobadas</li>
+      </ul>
+      <button type="submit">Enviar solicitud</button>
+      <p id="mensaje" role="status"></p>
+    </div>
+  </form>
+
+  <!-- Panel lateral: resumen del año del empleado -->
+  <aside id="panel" class="tarjeta panel" hidden>
+    <div class="panel-cabecera">
+      <h2>Mis vacaciones</h2>
+      <div class="selector-anio">
+        <button type="button" id="anio-prev" aria-label="Año anterior">‹</button>
+        <span id="anio"></span>
+        <button type="button" id="anio-next" aria-label="Año siguiente">›</button>
+      </div>
+    </div>
+
+    <div class="contadores">
+      <div class="contador destacado">
+        <span class="num" id="c-disponibles"></span>
+        <span class="txt">Días disponibles</span>
+      </div>
+      <div class="contador">
+        <span class="num" id="c-total"></span>
+        <span class="txt">Días al año</span>
+      </div>
+      <div class="contador c-aprobada">
+        <span class="num" id="c-aprobados"></span>
+        <span class="txt">Aprobados</span>
+      </div>
+      <div class="contador c-pendiente">
+        <span class="num" id="c-pendientes"></span>
+        <span class="txt">Pendientes</span>
+      </div>
+    </div>
+
+    <div class="barra" role="img" id="barra">
+      <span class="seg seg-aprobada" id="seg-aprobada"></span>
+      <span class="seg seg-pendiente" id="seg-pendiente"></span>
+    </div>
+    <p class="barra-texto" id="barra-texto"></p>
+
+    <div class="mini-cal" id="mini-cal"></div>
+
+    <ul class="leyenda leyenda-fila">
+      <li><span class="muestra-plana aprobada"></span> Aprobadas</li>
+      <li><span class="muestra-plana pendiente"></span> Pendientes</li>
+      <li><span class="muestra-plana rechazada"></span> Rechazadas</li>
+      <li><span class="muestra-plana no-disponible"></span> No disponible (compañero)</li>
+      <li><span class="muestra-plana pasado"></span> Ya pasado</li>
+      <li><span class="muestra-plana hoy"></span> Hoy</li>
+    </ul>
+
+    <h3>Mis solicitudes</h3>
+    <ul class="lista-solicitudes" id="lista-solicitudes"></ul>
+
+    <h3>Días no disponibles</h3>
+    <p class="ayuda">Ya los ha pedido un compañero de tu autolavado. No se pueden coger.</p>
+    <ul class="lista-solicitudes" id="lista-no-disponibles"></ul>
+  </aside>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
 <script>
-  const formEmail = document.getElementById("form-email");
-  const msgEmail = document.getElementById("mensaje-email");
   const form = document.getElementById("form-solicitud");
+  const inputEmail = form.email;
+  const btnContinuar = document.getElementById("btn-continuar");
+  const msgEmail = document.getElementById("mensaje-email");
+  const pasoFechas = document.getElementById("paso-fechas");
   const mensaje = document.getElementById("mensaje");
+  const panel = document.getElementById("panel");
   let picker, empleado, email;
+  let anio = new Date().getFullYear();
 
-  formEmail.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+                 "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const fmt = iso => iso.split("-").reverse().join("/");
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  async function identificar() {
     msgEmail.textContent = "";
-    email = formEmail.email.value.trim();
+    if (!inputEmail.reportValidity()) return;
+    email = inputEmail.value.trim();
 
     const resp = await fetch(`/api/identificar?email=${encodeURIComponent(email)}`);
     const json = await resp.json();
@@ -54,18 +122,28 @@
     empleado = json;
     document.getElementById("nombre").textContent = empleado.nombre;
     document.getElementById("autolavado").textContent = empleado.autolavado;
-    formEmail.hidden = true;
-    form.hidden = false;
+    btnContinuar.hidden = true;
+    pasoFechas.hidden = false;
+    panel.hidden = false;
     mensaje.textContent = "";
+    anio = new Date().getFullYear();
     cargarCalendario();
+    cargarResumen();
+  }
+
+  // Si cambia el email, hay que volver a identificarse
+  inputEmail.addEventListener("input", () => {
+    if (!empleado) return;
+    empleado = null;
+    pasoFechas.hidden = true;
+    panel.hidden = true;
+    btnContinuar.hidden = false;
+    msgEmail.textContent = "";
   });
 
-  document.getElementById("cambiar").addEventListener("click", (e) => {
-    e.preventDefault();
-    form.hidden = true;
-    formEmail.hidden = false;
-    formEmail.email.select();
-  });
+  btnContinuar.addEventListener("click", identificar);
+
+  // ---------- Calendario para elegir fechas ----------
 
   // Solo se bloquean los días ya pedidos en su autolavado
   async function cargarCalendario() {
@@ -82,8 +160,8 @@
       disable: ocupadas.map(o => ({ from: o.from, to: o.to })),
       // Sombrea cada día ocupado según de quién sea
       onDayCreate: (_, __, fp, dia) => {
-        const iso = fp.formatDate(dia.dateObj, "Y-m-d");
-        const o = ocupadas.find(o => o.from <= iso && iso <= o.to);
+        const d = fp.formatDate(dia.dateObj, "Y-m-d");
+        const o = ocupadas.find(o => o.from <= d && d <= o.to);
         if (!o) return;
         if (o.propia) {
           dia.classList.add(o.estado === "Aprobada" ? "propio-aprobada" : "propio-pendiente");
@@ -96,6 +174,135 @@
     });
   }
 
+  // ---------- Panel "Mis vacaciones" ----------
+
+  async function cargarResumen() {
+    const [r, ocupadas] = await Promise.all([
+      fetch(`/api/resumen?email=${encodeURIComponent(email)}&anio=${anio}`).then(r => r.json()),
+      fetch(`/api/ocupadas?autolavado=${empleado.autolavado_id}&email=${encodeURIComponent(email)}`).then(r => r.json()),
+    ]);
+    // Días de compañeros que tocan el año mostrado
+    const deCompaneros = ocupadas
+      .filter(o => !o.propia && o.from <= `${anio}-12-31` && o.to >= `${anio}-01-01`)
+      .sort((a, b) => a.from.localeCompare(b.from));
+    document.getElementById("anio").textContent = r.anio;
+    document.getElementById("c-disponibles").textContent = r.disponibles;
+    document.getElementById("c-total").textContent = r.dias_anuales;
+    document.getElementById("c-aprobados").textContent = r.aprobados;
+    document.getElementById("c-pendientes").textContent = r.pendientes;
+
+    const total = Math.max(r.dias_anuales, 1);
+    document.getElementById("seg-aprobada").style.width = `${Math.min(r.aprobados / total, 1) * 100}%`;
+    document.getElementById("seg-pendiente").style.width = `${Math.min(r.pendientes / total, 1 - Math.min(r.aprobados / total, 1)) * 100}%`;
+    const usados = r.aprobados + r.pendientes;
+    const texto = `Has usado ${usados} de ${r.dias_anuales} días · te quedan ${r.disponibles}`;
+    document.getElementById("barra-texto").textContent = texto;
+    document.getElementById("barra").setAttribute("aria-label", texto);
+
+    pintarAnio(r.anio, r.solicitudes, deCompaneros);
+    pintarLista(r.solicitudes);
+    pintarNoDisponibles(deCompaneros);
+  }
+
+  // Calendario anual: 12 meses pequeños con los días pintados por estado
+  function pintarAnio(year, solicitudes, deCompaneros) {
+    const ETIQUETA = { Aprobada: "Aprobada", Pendiente: "Pendiente", Rechazada: "Rechazada",
+                       "No-disponible": "No disponible (cogido por un compañero)" };
+    // Lo propio se ve por encima de lo de compañeros
+    const prioridad = { Aprobada: 4, Pendiente: 3, Rechazada: 2, "No-disponible": 1 };
+    const estadoDia = {};
+    const marcar = (desde, hasta, estado) => {
+      for (let d = new Date(desde + "T00:00"); iso(d) <= hasta; d.setDate(d.getDate() + 1)) {
+        const k = iso(d);
+        if (!estadoDia[k] || prioridad[estado] > prioridad[estadoDia[k]]) estadoDia[k] = estado;
+      }
+    };
+    for (const o of deCompaneros) marcar(o.from, o.to, "No-disponible");
+    for (const s of solicitudes) marcar(s.from, s.to, s.estado);
+    const hoy = iso(new Date());
+    const cont = document.getElementById("mini-cal");
+    cont.replaceChildren();
+
+    for (let m = 0; m < 12; m++) {
+      const mes = document.createElement("div");
+      mes.className = "mes";
+      mes.append(Object.assign(document.createElement("div"), { className: "mes-nombre", textContent: MESES[m] }));
+
+      const rejilla = document.createElement("div");
+      rejilla.className = "mes-dias";
+      for (const l of ["L", "M", "X", "J", "V", "S", "D"]) {
+        rejilla.append(Object.assign(document.createElement("span"), { className: "dsem", textContent: l }));
+      }
+      const primero = new Date(year, m, 1);
+      const hueco = (primero.getDay() + 6) % 7;   // la semana empieza en lunes
+      for (let i = 0; i < hueco; i++) rejilla.append(document.createElement("span"));
+
+      const diasMes = new Date(year, m + 1, 0).getDate();
+      for (let d = 1; d <= diasMes; d++) {
+        const k = iso(new Date(year, m, d));
+        const celda = Object.assign(document.createElement("span"), { className: "dia", textContent: d });
+        if (estadoDia[k]) {
+          celda.classList.add(estadoDia[k].toLowerCase());
+          celda.title = `${fmt(k)}: ${ETIQUETA[estadoDia[k]]}`;
+        } else if (k < hoy) {
+          celda.classList.add("pasado");
+        }
+        if (k === hoy) celda.classList.add("hoy");
+        rejilla.append(celda);
+      }
+      mes.append(rejilla);
+      cont.append(mes);
+    }
+  }
+
+  function pintarLista(solicitudes) {
+    const ul = document.getElementById("lista-solicitudes");
+    ul.replaceChildren();
+    if (!solicitudes.length) {
+      ul.append(Object.assign(document.createElement("li"), { className: "vacia", textContent: "Aún no has pedido vacaciones este año." }));
+      return;
+    }
+    for (const s of [...solicitudes].reverse()) {
+      const li = document.createElement("li");
+      const fechas = s.from === s.to ? fmt(s.from) : `${fmt(s.from)} – ${fmt(s.to)}`;
+      li.append(
+        Object.assign(document.createElement("span"), { className: "sol-fechas", textContent: fechas }),
+        Object.assign(document.createElement("span"), { className: "sol-dias", textContent: `${s.dias} ${s.dias === 1 ? "día" : "días"}` }),
+        Object.assign(document.createElement("span"), { className: `estado-chip ${s.estado.toLowerCase()}`, textContent: s.estado }),
+      );
+      if (s.comentario) {
+        li.append(Object.assign(document.createElement("span"), { className: "sol-comentario", textContent: `“${s.comentario}”` }));
+      }
+      ul.append(li);
+    }
+  }
+
+  function pintarNoDisponibles(deCompaneros) {
+    const ul = document.getElementById("lista-no-disponibles");
+    ul.replaceChildren();
+    const hoy = iso(new Date());
+    const futuras = deCompaneros.filter(o => o.to >= hoy);
+    if (!futuras.length) {
+      ul.append(Object.assign(document.createElement("li"), { className: "vacia", textContent: "Todos los días están libres." }));
+      return;
+    }
+    for (const o of futuras) {
+      const n = Math.round((new Date(o.to) - new Date(o.from)) / 86400000) + 1;
+      const li = document.createElement("li");
+      li.append(
+        Object.assign(document.createElement("span"), { className: "sol-fechas", textContent: o.from === o.to ? fmt(o.from) : `${fmt(o.from)} – ${fmt(o.to)}` }),
+        Object.assign(document.createElement("span"), { className: "sol-dias", textContent: `${n} ${n === 1 ? "día" : "días"}` }),
+        Object.assign(document.createElement("span"), { className: "estado-chip no-disponible", textContent: "No disponible" }),
+      );
+      ul.append(li);
+    }
+  }
+
+  document.getElementById("anio-prev").addEventListener("click", () => { anio--; cargarResumen(); });
+  document.getElementById("anio-next").addEventListener("click", () => { anio++; cargarResumen(); });
+
+  // ---------- Envío ----------
+
   function mostrar(texto, ok) {
     mensaje.textContent = texto;
     mensaje.className = ok ? "ok" : "err";
@@ -103,6 +310,8 @@
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    // Pulsar Enter en el email antes de identificarse equivale a "Continuar"
+    if (!empleado) return identificar();
     if (!picker.selectedDates.length) return mostrar("Elige un rango de fechas.", false);
     const [inicio, fin] = picker.selectedDates;
 
@@ -121,10 +330,12 @@
 
     if (resp.ok) {
       mostrar(`Solicitud #${json.id} enviada. Tu encargado recibirá un email para aprobarla.`, true);
+      anio = inicio.getFullYear();
     } else {
       mostrar(json.error || "Error al enviar la solicitud.", false);
     }
     cargarCalendario();
+    cargarResumen();
   });
 </script>
 {% endblock %}

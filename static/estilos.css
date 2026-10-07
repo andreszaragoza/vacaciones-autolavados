@@ -1,4 +1,5 @@
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -75,7 +76,6 @@ textarea { padding: .5rem; border: 1px solid #ccc; border-radius: 4px; font: inh
 .detalle dd { margin: 0; }
 .ok { color: #2e7d32; }
 .err { color: #c62828; }
-.saludo { margin: 0; line-height: 1.6; }
 tr.inactivo td { opacity: .5; }
 
 /* Días ocupados en el calendario */
@@ -105,3 +105,89 @@ tr.inactivo td { opacity: .5; }
 .muestra.ocupado { background: repeating-linear-gradient(45deg, #d9d9d9, #d9d9d9 3px, #bdbdbd 3px, #bdbdbd 6px); }
 .muestra.propio-pendiente { background: repeating-linear-gradient(45deg, #ffe0b2, #ffe0b2 3px, #ffcc80 3px, #ffcc80 6px); }
 .muestra.propio-aprobada { background: repeating-linear-gradient(45deg, #c8e6c9, #c8e6c9 3px, #a5d6a7 3px, #a5d6a7 6px); }
+
+/* Formulario de solicitud */
+.tarjeta h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
+.fila-email { display: flex; gap: .5rem; font-weight: normal; }
+.fila-email input { flex: 1; min-width: 0; }
+.paso { display: flex; flex-direction: column; gap: 1rem; padding-top: 1rem; border-top: 1px solid #e5e5e5; }
+.identidad { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0; }
+.etiqueta { padding: .15rem .6rem; border-radius: 999px; background: #e8eef6; color: #1f3a5f; font-size: .85rem; font-weight: 600; }
+#mensaje-email:empty, #mensaje:empty { display: none; }
+
+/* ---------- Página de solicitud: formulario + panel ---------- */
+main { max-width: 1200px; }
+.layout-solicitud { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 1.5rem; align-items: start; }
+.layout-solicitud .tarjeta { max-width: none; }
+@media (max-width: 860px) { .layout-solicitud { grid-template-columns: 1fr; } }
+
+.panel h2 { margin: 0; font-size: 1.25rem; }
+.panel h3 { margin: .5rem 0 0; font-size: 1rem; }
+.panel-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.selector-anio { display: flex; align-items: center; gap: .5rem; font-weight: 700; font-size: 1.05rem; }
+.selector-anio button { padding: .2rem .65rem; background: #eef1f5; color: #1f3a5f; font-size: 1.1rem; line-height: 1; }
+
+/* Contadores */
+.contadores { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
+@media (max-width: 520px) { .contadores { grid-template-columns: repeat(2, 1fr); } }
+.contador { display: flex; flex-direction: column; gap: .15rem; padding: .8rem; border-radius: 8px; background: #f5f6f8; border-left: 4px solid #b0bec5; }
+.contador .num { font-size: 1.8rem; font-weight: 700; line-height: 1; color: #1f3a5f; }
+.contador .txt { font-size: .8rem; color: #555; }
+.contador.destacado { background: #1f3a5f; border-left-color: #1f3a5f; }
+.contador.destacado .num, .contador.destacado .txt { color: #fff; }
+.contador.c-aprobada { border-left-color: #43a047; }
+.contador.c-aprobada .num { color: #2e7d32; }
+.contador.c-pendiente { border-left-color: #fb8c00; }
+.contador.c-pendiente .num { color: #b26a00; }
+
+/* Barra de progreso */
+.barra { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e3e7ec; }
+.seg { display: block; height: 100%; transition: width .3s; }
+.seg-aprobada { background: #43a047; }
+.seg-pendiente { background: #fb8c00; }
+.barra-texto { margin: -.5rem 0 0; font-size: .85rem; color: #555; }
+
+/* Calendario anual */
+.mini-cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem .75rem; }
+.mes-nombre { font-weight: 700; font-size: .85rem; margin-bottom: .3rem; color: #1f3a5f; }
+.mes-dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: .7rem; }
+.mes-dias .dsem { color: #999; font-weight: 600; }
+.mes-dias .dia { padding: 2px 0; border-radius: 3px; color: #444; }
+.mes-dias .dia.aprobada { background: #43a047; color: #fff; font-weight: 600; }
+.mes-dias .dia.pendiente { background: #fb8c00; color: #fff; font-weight: 600; }
+.mes-dias .dia.rechazada { background: #ffcdd2; color: #b71c1c; text-decoration: line-through; }
+.mes-dias .dia.hoy { outline: 2px solid #1f3a5f; outline-offset: -1px; font-weight: 700; }
+
+.leyenda-fila { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: 0; }
+.muestra-plana { display: inline-block; width: .9rem; height: .9rem; border-radius: 3px; }
+.muestra-plana.aprobada { background: #43a047; }
+.muestra-plana.pendiente { background: #fb8c00; }
+.muestra-plana.rechazada { background: #ffcdd2; border: 1px solid #e57373; }
+.muestra-plana.hoy { outline: 2px solid #1f3a5f; outline-offset: -2px; }
+
+/* Lista de solicitudes */
+.lista-solicitudes { list-style: none; margin: 0; padding: 0; }
+.lista-solicitudes li { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .75rem; padding: .55rem 0; border-bottom: 1px solid #eee; font-size: .9rem; }
+.lista-solicitudes li.vacia { color: #777; border: 0; }
+.sol-fechas { font-weight: 600; }
+.sol-dias { color: #666; }
+.sol-comentario { flex-basis: 100%; color: #666; font-style: italic; font-size: .85rem; }
+.estado-chip { margin-left: auto; padding: .1rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+.estado-chip.aprobada { background: #e8f5e9; color: #2e7d32; }
+.estado-chip.pendiente { background: #fff3e0; color: #b26a00; }
+.estado-chip.rechazada { background: #ffebee; color: #c62828; }
+
+/* Admin: días por empleado */
+input.num-dias { width: 4.5rem; }
+.disponibles { font-weight: 600; color: #1f3a5f; }
+
+/* Días no disponibles en el calendario anual */
+.mes-dias .dia.no-disponible {
+  background: repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 3px, #bdbdbd 3px, #bdbdbd 6px);
+  color: #616161; text-decoration: line-through;
+}
+.mes-dias .dia.pasado { color: #c4c4c4; }
+.muestra-plana.no-disponible { background: repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 2px, #bdbdbd 2px, #bdbdbd 4px); border: 1px solid #bdbdbd; }
+.muestra-plana.pasado { background: #f0f0f0; border: 1px solid #ddd; }
+.estado-chip.no-disponible { background: #eeeeee; color: #616161; }
+.ayuda { margin: -.6rem 0 0; font-size: .82rem; color: #777; }
