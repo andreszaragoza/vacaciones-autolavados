@@ -18,8 +18,7 @@ Hecha con **Python + Flask + SQLite**. El calendario usa **flatpickr**.
 8. [API](#8-api)
 9. [Reglas de negocio](#9-reglas-de-negocio)
 10. [Problemas frecuentes](#10-problemas-frecuentes)
-11. [Pendiente](#11-pendiente)
-12. [Seguridad](#12-seguridad)
+
 
 ---
 
@@ -297,17 +296,4 @@ Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404`
 
 ---
 
-## 11. Pendiente
 
-- [ ] **Contraseña para el panel `/admin`.** Imprescindible antes de publicar la app en internet. La administradora elige la contraseña.
-- [ ] **Configurar el correo real** en `.env` con la cuenta que dé la administradora.
-- [ ] **Publicar en PythonAnywhere** y poner la dirección pública en `BASE_URL`.
-
----
-
-## 12. Seguridad
-
-- **No compartas el archivo `.env`**, porque contiene la contraseña del correo. Si envías el proyecto en un zip, no lo incluyas, y tampoco `venv/` ni `vacaciones.db`.
-- El `.gitignore` ya excluye esos archivos.
-- **Git:** el repositorio actual abarca **todo el Escritorio**, donde hay documentos personales, y está conectado a GitHub. No hagas `git add .` ni `git push` desde el Escritorio. Si quieres subir este proyecto a GitHub, crea un repositorio propio solo para la carpeta `Vacaciones/Vacaciones`.
-- El panel `/admin` **no tiene contraseña todavía**. Ver [Pendiente](#11-pendiente).
