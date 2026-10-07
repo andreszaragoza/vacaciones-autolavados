@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}Panel de gestión{% endblock %}
+
+{% block content %}
+<h1>Panel de gestión</h1>
+
+<h2>Solicitudes</h2>
+<div class="filtros">
+  <label class="filtro">Autolavado
+    <select id="filtro-autolavado">
+      <option value="">Todos</option>
+    </select>
+  </label>
+  <label class="filtro">Estado
+    <select id="filtro">
+      <option value="">Todas</option>
+      <option value="Pendiente" selected>Pendientes</option>
+      <option value="Aprobada">Aprobadas</option>
+      <option value="Rechazada">Rechazadas</option>
+    </select>
+  </label>
+</div>
+
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Autolavado</th><th>Empleado</th><th>Email</th><th>Desde</th><th>Hasta</th>
+        <th>Días</th><th>Estado</th><th>Comentario</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="filas"></tbody>
+  </table>
+</div>
+<p id="vacio" hidden>No hay solicitudes.</p>
+
+<h2>Empleados</h2>
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr><th>Nombre</th><th>Email</th><th>Autolavado</th><th>Activo</th><th></th></tr>
+    </thead>
+    <tbody id="filas-empleados"></tbody>
+    <tfoot>
+      <tr>
+        <td><input id="emp-nombre" placeholder="Nombre y apellidos"></td>
+        <td><input id="emp-email" type="email" placeholder="empleado@ejemplo.com"></td>
+        <td><select id="emp-autolavado"></select></td>
+        <td></td>
+        <td><button id="btn-anadir-emp">Añadir</button></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<p id="msg-empleados" role="status"></p>
+
+<h2>Autolavados</h2>
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr><th>Nombre</th><th>Email del encargado</th><th></th></tr>
+    </thead>
+    <tbody id="filas-autolavados"></tbody>
+    <tfoot>
+      <tr>
+        <td><input id="nuevo-nombre" placeholder="Nombre del autolavado"></td>
+        <td><input id="nuevo-email" type="email" placeholder="encargado@ejemplo.com"></td>
+        <td><button id="btn-anadir">Añadir</button></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<p id="msg-autolavados" role="status"></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const filas = document.getElementById("filas");
+  const filtro = document.getElementById("filtro");
+  const filtroAutolavado = document.getElementById("filtro-autolavado");
+  const vacio = document.getElementById("vacio");
+  const filasAutolavados = document.getElementById("filas-autolavados");
+  const msgAutolavados = document.getElementById("msg-autolavados");
+
+  const fmt = iso => iso.split("-").reverse().join("/");
+  const dias = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+
+  function celda(texto) {
+    const td = document.createElement("td");
+    td.textContent = texto ?? "";
+    return td;
+  }
+
+  async function enviarJSON(url, method, datos) {
+    const resp = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos),
+    });
+    return { ok: resp.ok, json: await resp.json() };
+  }
+
+  // ---------- Solicitudes ----------
+
+  async function cargar() {
+    const todas = await fetch("/api/solicitudes").then(r => r.json());
+    const lista = todas.filter(s =>
+      (!filtro.value || s.estado === filtro.value) &&
+      (!filtroAutolavado.value || String(s.autolavado_id) === filtroAutolavado.value)
+    );
+
+    filas.replaceChildren();
+    vacio.hidden = lista.length > 0;
+
+    for (const s of lista) {
+      const tr = document.createElement("tr");
+      tr.append(
+        celda(s.id), celda(s.autolavado ?? "—"), celda(s.empleado), celda(s.email),
+        celda(fmt(s.fecha_inicio)), celda(fmt(s.fecha_fin)),
+        celda(dias(s.fecha_inicio, s.fecha_fin)),
+      );
+
+      const tdEstado = celda(s.estado);
+      tdEstado.className = "estado " + s.estado.toLowerCase();
+      tr.append(tdEstado);
+
+      const tdComentario = document.createElement("td");
+      const tdAcciones = document.createElement("td");
+
+      if (s.estado === "Pendiente") {
+        const input = document.createElement("input");
+        input.placeholder = "Opcional";
+        tdComentario.append(input);
+
+        for (const [estado, texto] of [["Aprobada", "Aprobar"], ["Rechazada", "Rechazar"]]) {
+          const btn = document.createElement("button");
+          btn.textContent = texto;
+          btn.className = estado === "Aprobada" ? "aprobar" : "rechazar";
+          btn.onclick = () => resolver(s.id, estado, input.value);
+          tdAcciones.append(btn);
+        }
+      } else {
+        tdComentario.textContent = s.comentario ?? "";
+      }
+
+      tr.append(tdComentario, tdAcciones);
+      filas.append(tr);
+    }
+  }
+
+  async function resolver(id, estado, comentario) {
+    const { ok, json } = await enviarJSON(`/api/solicitudes/${id}/estado`, "POST", { estado, comentario });
+    if (!ok) window.alert(json.error || "Error al actualizar.");
+    cargar();
+  }
+
+  function avisoAutolavados(texto, ok) {
+    msgAutolavados.textContent = texto;
+    msgAutolavados.className = ok ? "ok" : "err";
+  }
+
+  // ---------- Empleados ----------
+
+  const filasEmpleados = document.getElementById("filas-empleados");
+  const msgEmpleados = document.getElementById("msg-empleados");
+  const empAutolavado = document.getElementById("emp-autolavado");
+  let autolavados = [];
+
+  function avisoEmpleados(texto, ok) {
+    msgEmpleados.textContent = texto;
+    msgEmpleados.className = ok ? "ok" : "err";
+  }
+
+  function selectAutolavado(valor) {
+    const sel = document.createElement("select");
+    for (const a of autolavados) sel.add(new Option(a.nombre, a.id));
+    if (valor != null) sel.value = valor;
+    return sel;
+  }
+
+  async function cargarEmpleados() {
+    const lista = await fetch("/api/empleados").then(r => r.json());
+
+    const actual = empAutolavado.value;
+    empAutolavado.replaceChildren(...selectAutolavado().options);
+    if (actual) empAutolavado.value = actual;
+
+    filasEmpleados.replaceChildren();
+    for (const e of lista) {
+      const tr = document.createElement("tr");
+      if (!e.activo) tr.className = "inactivo";
+      const nombre = Object.assign(document.createElement("input"), { value: e.nombre });
+      const email = Object.assign(document.createElement("input"), { value: e.email, type: "email" });
+      const lavado = selectAutolavado(e.autolavado_id);
+      const activo = Object.assign(document.createElement("input"), { type: "checkbox", checked: !!e.activo });
+      const btn = Object.assign(document.createElement("button"), { textContent: "Guardar" });
+      btn.onclick = async () => {
+        const { ok, json } = await enviarJSON(`/api/empleados/${e.id}`, "PUT", {
+          nombre: nombre.value, email: email.value,
+          autolavado_id: lavado.value, activo: activo.checked,
+        });
+        avisoEmpleados(ok ? "Cambios guardados." : json.error, ok);
+        cargarEmpleados();
+      };
+      for (const el of [nombre, email, lavado, activo, btn]) {
+        const td = document.createElement("td");
+        td.append(el);
+        tr.append(td);
+      }
+      filasEmpleados.append(tr);
+    }
+  }
+
+  document.getElementById("btn-anadir-emp").onclick = async () => {
+    const nombre = document.getElementById("emp-nombre");
+    const email = document.getElementById("emp-email");
+    if (!autolavados.length) return avisoEmpleados("Primero añade un autolavado.", false);
+    const { ok, json } = await enviarJSON("/api/empleados", "POST",
+      { nombre: nombre.value, email: email.value, autolavado_id: empAutolavado.value });
+    avisoEmpleados(ok ? "Empleado añadido." : json.error, ok);
+    if (ok) { nombre.value = ""; email.value = ""; }
+    cargarEmpleados();
+  };
+
+  // ---------- Autolavados ----------
+
+  async function cargarAutolavados() {
+    const lista = await fetch("/api/autolavados").then(r => r.json());
+    autolavados = lista;
+    cargarEmpleados();
+
+    const actual = filtroAutolavado.value;
+    filtroAutolavado.replaceChildren(new Option("Todos", ""));
+    for (const a of lista) filtroAutolavado.add(new Option(a.nombre, a.id));
+    filtroAutolavado.value = actual;
+
+    filasAutolavados.replaceChildren();
+    for (const a of lista) {
+      const tr = document.createElement("tr");
+      const nombre = Object.assign(document.createElement("input"), { value: a.nombre });
+      const email = Object.assign(document.createElement("input"), { value: a.email_encargado, type: "email" });
+      const btn = Object.assign(document.createElement("button"), { textContent: "Guardar" });
+      btn.onclick = async () => {
+        const { ok, json } = await enviarJSON(`/api/autolavados/${a.id}`, "PUT",
+          { nombre: nombre.value, email_encargado: email.value });
+        avisoAutolavados(ok ? "Cambios guardados." : json.error, ok);
+        cargarAutolavados();
+        cargar();
+      };
+      for (const el of [nombre, email, btn]) {
+        const td = document.createElement("td");
+        td.append(el);
+        tr.append(td);
+      }
+      filasAutolavados.append(tr);
+    }
+  }
+
+  document.getElementById("btn-anadir").onclick = async () => {
+    const nombre = document.getElementById("nuevo-nombre");
+    const email = document.getElementById("nuevo-email");
+    const { ok, json } = await enviarJSON("/api/autolavados", "POST",
+      { nombre: nombre.value, email_encargado: email.value });
+    avisoAutolavados(ok ? "Autolavado añadido." : json.error, ok);
+    if (ok) { nombre.value = ""; email.value = ""; }
+    cargarAutolavados();
+  };
+
+  filtro.addEventListener("change", cargar);
+  filtroAutolavado.addEventListener("change", cargar);
+  cargarAutolavados();
+  cargar();
+</script>
+{% endblock %}

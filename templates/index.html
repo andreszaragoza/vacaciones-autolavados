@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Solicitar vacaciones{% endblock %}
+
+{% block content %}
+<h1>Solicitar vacaciones</h1>
+
+<!-- Paso 1: el empleado se identifica con su email -->
+<form id="form-email" class="tarjeta">
+  <label>Tu email
+    <input name="email" type="email" required autocomplete="email">
+  </label>
+  <button type="submit">Continuar</button>
+  <p id="mensaje-email" class="err" role="status"></p>
+</form>
+
+<!-- Paso 2: elige las fechas en el calendario de su autolavado -->
+<form id="form-solicitud" class="tarjeta" hidden>
+  <p class="saludo">
+    Hola <strong id="nombre"></strong> · <span id="autolavado"></span><br>
+    <a href="#" id="cambiar">¿No eres tú?</a>
+  </p>
+  <label>Fechas
+    <input id="fechas" placeholder="Elige inicio y fin" required>
+  </label>
+  <ul class="leyenda">
+    <li><span class="muestra ocupado"></span> Cogido por un compañero</li>
+    <li><span class="muestra propio-pendiente"></span> Tus vacaciones pendientes</li>
+    <li><span class="muestra propio-aprobada"></span> Tus vacaciones aprobadas</li>
+  </ul>
+  <button type="submit">Enviar solicitud</button>
+  <p id="mensaje" role="status"></p>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
+<script>
+  const formEmail = document.getElementById("form-email");
+  const msgEmail = document.getElementById("mensaje-email");
+  const form = document.getElementById("form-solicitud");
+  const mensaje = document.getElementById("mensaje");
+  let picker, empleado, email;
+
+  formEmail.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msgEmail.textContent = "";
+    email = formEmail.email.value.trim();
+
+    const resp = await fetch(`/api/identificar?email=${encodeURIComponent(email)}`);
+    const json = await resp.json();
+    if (!resp.ok) return (msgEmail.textContent = json.error);
+
+    empleado = json;
+    document.getElementById("nombre").textContent = empleado.nombre;
+    document.getElementById("autolavado").textContent = empleado.autolavado;
+    formEmail.hidden = true;
+    form.hidden = false;
+    mensaje.textContent = "";
+    cargarCalendario();
+  });
+
+  document.getElementById("cambiar").addEventListener("click", (e) => {
+    e.preventDefault();
+    form.hidden = true;
+    formEmail.hidden = false;
+    formEmail.email.select();
+  });
+
+  // Solo se bloquean los días ya pedidos en su autolavado
+  async function cargarCalendario() {
+    const url = `/api/ocupadas?autolavado=${empleado.autolavado_id}&email=${encodeURIComponent(email)}`;
+    const ocupadas = await fetch(url).then(r => r.json());
+    if (picker) picker.destroy();
+    picker = flatpickr("#fechas", {
+      mode: "range",
+      locale: "es",
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      minDate: "today",
+      disable: ocupadas.map(o => ({ from: o.from, to: o.to })),
+      // Sombrea cada día ocupado según de quién sea
+      onDayCreate: (_, __, fp, dia) => {
+        const iso = fp.formatDate(dia.dateObj, "Y-m-d");
+        const o = ocupadas.find(o => o.from <= iso && iso <= o.to);
+        if (!o) return;
+        if (o.propia) {
+          dia.classList.add(o.estado === "Aprobada" ? "propio-aprobada" : "propio-pendiente");
+          dia.title = `Tus vacaciones (${o.estado.toLowerCase()})`;
+        } else {
+          dia.classList.add("ocupado");
+          dia.title = "No disponible: cogido por un compañero";
+        }
+      },
+    });
+  }
+
+  function mostrar(texto, ok) {
+    mensaje.textContent = texto;
+    mensaje.className = ok ? "ok" : "err";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!picker.selectedDates.length) return mostrar("Elige un rango de fechas.", false);
+    const [inicio, fin] = picker.selectedDates;
+
+    const resp = await fetch("/api/solicitudes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        fecha_inicio: picker.formatDate(inicio, "Y-m-d"),
+        // Si solo se elige un día, inicio y fin son el mismo
+        fecha_fin: picker.formatDate(fin || inicio, "Y-m-d"),
+      }),
+    });
+    // Si el servidor falla devuelve HTML en vez de JSON
+    const json = await resp.json().catch(() => ({ error: "Error del servidor. Inténtalo de nuevo." }));
+
+    if (resp.ok) {
+      mostrar(`Solicitud #${json.id} enviada. Tu encargado recibirá un email para aprobarla.`, true);
+    } else {
+      mostrar(json.error || "Error al enviar la solicitud.", false);
+    }
+    cargarCalendario();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Revisar solicitud{% endblock %}
+
+{% block content %}
+<h1>Revisar solicitud de vacaciones</h1>
+
+{% if not s %}
+  <p class="tarjeta">Este enlace no es válido.</p>
+{% else %}
+  <div class="tarjeta">
+    <dl class="detalle">
+      <dt>Empleado</dt><dd>{{ s.empleado }} ({{ s.email }})</dd>
+      <dt>Autolavado</dt><dd>{{ s.autolavado or "—" }}</dd>
+      <dt>Desde</dt><dd>{{ fmt(s.fecha_inicio) }}</dd>
+      <dt>Hasta</dt><dd>{{ fmt(s.fecha_fin) }}</dd>
+      <dt>Días</dt><dd>{{ dias }}</dd>
+      <dt>Estado</dt><dd class="estado {{ s.estado|lower }}">{{ s.estado }}</dd>
+      {% if s.comentario %}<dt>Comentario</dt><dd>{{ s.comentario }}</dd>{% endif %}
+    </dl>
+
+    {% if mensaje %}<p class="err">{{ mensaje }}</p>{% endif %}
+
+    {% if s.estado == "Pendiente" %}
+      <form method="post">
+        <label>Comentario (opcional)
+          <textarea name="comentario" rows="3"></textarea>
+        </label>
+        <div class="botones">
+          <button name="estado" value="Aprobada" class="aprobar">Aprobar</button>
+          <button name="estado" value="Rechazada" class="rechazar">Rechazar</button>
+        </div>
+      </form>
+    {% else %}
+      <p class="ok">Solicitud {{ s.estado|lower }}. Se ha avisado al empleado por email.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

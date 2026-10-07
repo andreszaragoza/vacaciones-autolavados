@@ -1,0 +1,4 @@
+.env
+vacaciones.db
+__pycache__/
+venv/
