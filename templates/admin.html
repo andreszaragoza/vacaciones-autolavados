@@ -77,6 +77,14 @@
 
 {% block scripts %}
 <script>
+  // Si la sesión caduca, volver a la pantalla de acceso
+  const fetchOriginal = window.fetch;
+  window.fetch = async (...args) => {
+    const resp = await fetchOriginal(...args);
+    if (resp.status === 401) location.href = "{{ url_for('login') }}";
+    return resp;
+  };
+
   const filas = document.getElementById("filas");
   const filtro = document.getElementById("filtro");
   const filtroAutolavado = document.getElementById("filtro-autolavado");

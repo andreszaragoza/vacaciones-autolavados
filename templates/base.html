@@ -7,11 +7,14 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
 </head>
-<body>
+<body{% if embed %} class="embed"{% endif %}>
+  {% if not embed %}
   <nav>
     <a href="{{ url_for('index') }}">Solicitar</a>
     <a href="{{ url_for('admin') }}">Panel de gestión</a>
+    {% if sesion_admin %}<a href="{{ url_for('logout') }}" class="nav-derecha">Cerrar sesión</a>{% endif %}
   </nav>
+  {% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>

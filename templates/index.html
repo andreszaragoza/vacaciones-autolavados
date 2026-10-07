@@ -338,4 +338,14 @@
     cargarResumen();
   });
 </script>
+{% if embed %}
+<script>
+  // Incrustado en otra web: avisa a la página de fuera de la altura que necesita
+  // para que el <iframe> crezca con el contenido y no salgan barras de scroll.
+  const avisarAltura = () => parent.postMessage(
+    { tipo: "vacaciones-altura", altura: document.documentElement.scrollHeight }, "*");
+  new ResizeObserver(avisarAltura).observe(document.body);
+  window.addEventListener("load", avisarAltura);
+</script>
+{% endif %}
 {% endblock %}

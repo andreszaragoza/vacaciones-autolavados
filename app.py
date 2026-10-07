@@ -1,15 +1,18 @@
+import hmac
 import os
 import re
 import secrets
 import smtplib
 import sqlite3
 import threading
+import time
 from datetime import date, timedelta
 from email.message import EmailMessage
+from functools import wraps
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, g, render_template, request
+from flask import Flask, jsonify, g, redirect, render_template, request, session, url_for
 
 load_dotenv(Path(__file__).with_name(".env"))
 
@@ -23,6 +26,16 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
 MAIL_FROM = os.environ.get("MAIL_FROM") or SMTP_USER
+
+# Acceso al panel de gestión (también en .env)
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or None
+# Sin SECRET_KEY se genera una al arrancar: funciona, pero las sesiones se pierden al reiniciar
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=BASE_URL.startswith("https://"),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
 
 ESTADOS_ACTIVOS = ("Pendiente", "Aprobada")
 DIAS_ANUALES_DEFECTO = 28
@@ -227,6 +240,66 @@ def resolver_solicitud(sid, nuevo, comentario):
     return None
 
 
+# ---------- Acceso al panel ----------
+
+def admin_autorizado():
+    if ADMIN_PASSWORD:
+        return session.get("admin") is True
+    # Sin contraseña configurada: solo en local arrancando con `python app.py` (modo debug)
+    return app.debug and request.remote_addr in ("127.0.0.1", "::1")
+
+
+def solo_admin(f):
+    """Protege una página o endpoint del panel de gestión."""
+    @wraps(f)
+    def envoltura(*args, **kwargs):
+        if admin_autorizado():
+            return f(*args, **kwargs)
+        if request.path.startswith("/api/"):
+            return error("Inicia sesión en el panel de gestión.", 401)
+        return redirect(url_for("login"))
+    return envoltura
+
+
+@app.context_processor
+def datos_plantillas():
+    return {"sesion_admin": bool(ADMIN_PASSWORD) and session.get("admin") is True}
+
+
+@app.after_request
+def no_incrustar_panel(resp):
+    # El panel y la página del encargado no se pueden meter en un iframe ajeno
+    if request.path.startswith(("/admin", "/revisar")):
+        resp.headers["X-Frame-Options"] = "DENY"
+    return resp
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def login():
+    if admin_autorizado():
+        return redirect(url_for("admin"))
+    if not ADMIN_PASSWORD:
+        return render_template("login.html", sin_configurar=True), 503
+
+    fallo = False
+    if request.method == "POST":
+        escrita = (request.form.get("password") or "").encode()
+        if hmac.compare_digest(escrita, ADMIN_PASSWORD.encode()):
+            session.clear()
+            session["admin"] = True
+            session.permanent = True
+            return redirect(url_for("admin"))
+        time.sleep(1)   # frena los intentos de adivinar la contraseña
+        fallo = True
+    return render_template("login.html", fallo=fallo)
+
+
+@app.route("/admin/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 # ---------- Páginas ----------
 
 @app.route("/")
@@ -234,7 +307,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/embed")
+def embed():
+    """Formulario sin menú, para incrustar con un <iframe> en otra web."""
+    return render_template("index.html", embed=True)
+
+
 @app.route("/admin")
+@solo_admin
 def admin():
     return render_template("admin.html")
 
@@ -268,12 +348,14 @@ def datos_autolavado():
 
 
 @app.route("/api/autolavados", methods=["GET"])
+@solo_admin
 def listar_autolavados():
     rows = get_db().execute("SELECT * FROM autolavados ORDER BY nombre").fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/autolavados", methods=["POST"])
+@solo_admin
 def crear_autolavado():
     valores, msg = datos_autolavado()
     if msg:
@@ -288,6 +370,7 @@ def crear_autolavado():
 
 
 @app.route("/api/autolavados/<int:aid>", methods=["PUT"])
+@solo_admin
 def editar_autolavado(aid):
     valores, msg = datos_autolavado()
     if msg:
@@ -342,6 +425,7 @@ def datos_empleado():
 
 
 @app.route("/api/empleados", methods=["GET"])
+@solo_admin
 def listar_empleados():
     rows = get_db().execute(
         "SELECT e.*, a.nombre AS autolavado FROM empleados e "
@@ -357,6 +441,7 @@ def listar_empleados():
 
 
 @app.route("/api/empleados", methods=["POST"])
+@solo_admin
 def crear_empleado():
     valores, msg = datos_empleado()
     if msg:
@@ -373,6 +458,7 @@ def crear_empleado():
 
 
 @app.route("/api/empleados/<int:eid>", methods=["PUT"])
+@solo_admin
 def editar_empleado(eid):
     valores, msg = datos_empleado()
     if msg:
@@ -448,6 +534,7 @@ def ocupadas():
 
 
 @app.route("/api/solicitudes", methods=["GET"])
+@solo_admin
 def listar_solicitudes():
     rows = get_db().execute(SELECT_SOLICITUD + "ORDER BY s.fecha_inicio DESC").fetchall()
     # El token no se expone: es la "llave" del enlace de aprobación
@@ -513,6 +600,7 @@ def crear_solicitud():
 
 
 @app.route("/api/solicitudes/<int:sid>/estado", methods=["POST"])
+@solo_admin
 def cambiar_estado(sid):
     datos = request.get_json(silent=True) or {}
     comentario = (datos.get("comentario") or "").strip() or None

@@ -11,7 +11,7 @@ Hecha con **Python + Flask + SQLite**. El calendario usa **flatpickr**.
 1. [Qué hace la aplicación](#1-qué-hace-la-aplicación)
 2. [Estructura del proyecto](#2-estructura-del-proyecto)
 3. [Instalación y arranque](#3-instalación-y-arranque)
-4. [Configurar el envío de correos](#4-configurar-el-envío-de-correos)
+4. [Configuración: correo y contraseña del panel](#4-configuración-correo-y-contraseña-del-panel)
 5. [Cómo se usa](#5-cómo-se-usa)
 6. [Historial de desarrollo paso a paso](#6-historial-de-desarrollo-paso-a-paso)
 7. [Base de datos](#7-base-de-datos)
@@ -26,9 +26,10 @@ Hecha con **Python + Flask + SQLite**. El calendario usa **flatpickr**.
 
 | Quién | Qué puede hacer |
 |---|---|
-| **Administradora** (panel `/admin`) | Dar de alta autolavados con el email de su encargado, dar de alta o de baja empleados, fijar los días de vacaciones al año de cada uno y ver cuántos le quedan, ver todas las solicitudes, filtrarlas y aprobarlas o rechazarlas. |
+| **Administradora** (panel `/admin`, con contraseña) | Dar de alta autolavados con el email de su encargado, dar de alta o de baja empleados, fijar los días de vacaciones al año de cada uno y ver cuántos le quedan, ver todas las solicitudes, filtrarlas y aprobarlas o rechazarlas. |
 | **Empleado** (página principal `/`) | Identificarse con su email, pedir vacaciones en un calendario que bloquea los días ocupados y ver su panel *Mis vacaciones*: días disponibles, calendario del año, sus solicitudes y los días no disponibles. |
 | **Encargado** (enlace del email) | Recibir un email por cada solicitud nueva y aprobarla o rechazarla desde el enlace, sin entrar al panel. |
+| **Web del negocio** (`/embed`) | Incrustar el formulario y el panel *Mis vacaciones* en otra web (por ejemplo en GoDaddy) con un `<iframe>`, sin menú ni enlace al panel. |
 
 Además:
 - Las fechas solo **chocan entre empleados del mismo autolavado**.
@@ -46,7 +47,7 @@ Vacaciones/
 └── Vacaciones/
     ├── app.py                ← servidor Flask: base de datos, API, emails
     ├── requirements.txt      ← dependencias (flask, python-dotenv)
-    ├── .env.ejemplo          ← plantilla de configuración del correo
+    ├── .env.ejemplo          ← plantilla de configuración (correo y contraseña del panel)
     ├── .env                  ← configuración real (NO se comparte, tiene contraseñas)
     ├── .gitignore            ← evita subir .env, la base de datos y venv
     ├── vacaciones.db         ← base de datos SQLite (se crea sola)
@@ -54,8 +55,9 @@ Vacaciones/
     ├── Documentacion.ipynb   ← notebook con la documentación y ejemplos ejecutables
     ├── templates/
     │   ├── base.html         ← plantilla común (menú, estilos, flatpickr)
-    │   ├── index.html        ← formulario del empleado
+    │   ├── index.html        ← formulario del empleado (también la versión /embed)
     │   ├── admin.html        ← panel de gestión
+    │   ├── login.html        ← pantalla de acceso al panel
     │   └── revisar.html      ← página de aprobación que abre el encargado
     └── static/
         └── estilos.css       ← estilos de toda la app
@@ -75,7 +77,8 @@ cd C:\Users\anoni\Desktop\Vacaciones\Vacaciones
 Cuando aparezca `Running on http://127.0.0.1:5000`, abre en el navegador:
 
 - http://127.0.0.1:5000: formulario del empleado
-- http://127.0.0.1:5000/admin: panel de gestión
+- http://127.0.0.1:5000/embed: el mismo formulario sin menú, para incrustar en otra web
+- http://127.0.0.1:5000/admin: panel de gestión (mientras no haya contraseña configurada, en local entra directamente)
 
 **La terminal debe quedarse abierta** mientras uses la app. Para pararla, pulsa `Ctrl+C`.
 
@@ -93,7 +96,7 @@ python app.py
 
 ---
 
-## 4. Configurar el envío de correos
+## 4. Configuración: correo y contraseña del panel
 
 Si no hay archivo `.env`, **los emails no se envían**: se escriben en la terminal del servidor. Así se puede probar todo sin una cuenta de correo.
 
@@ -115,6 +118,30 @@ Para enviarlos de verdad:
 4. **Reinicia el servidor**, porque el `.env` solo se lee al arrancar.
 
 > Mientras la app esté en `127.0.0.1`, el enlace del email **solo se puede abrir desde este ordenador**. Para que el encargado pueda abrirlo desde su móvil, la app tiene que estar publicada en internet y `BASE_URL` tiene que tener la dirección pública.
+
+### Contraseña del panel de gestión
+
+Añade estas dos líneas al `.env` y reinicia el servidor:
+
+```ini
+ADMIN_PASSWORD=una-contraseña-larga
+SECRET_KEY=64-caracteres-aleatorios
+```
+
+- `SECRET_KEY` firma la sesión del panel. Se genera con:
+  ```powershell
+  ..\venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
+  ```
+  Si no se pone, la app crea una al arrancar. Funciona igual, pero hay que volver a entrar al panel cada vez que se reinicia el servidor.
+- Con contraseña, `/admin` muestra una pantalla de acceso. La sesión dura 12 horas y en el menú aparece **Cerrar sesión**.
+
+| Situación | Qué pasa con el panel |
+|---|---|
+| Sin `ADMIN_PASSWORD`, arrancada en local con `python app.py` | Abierto, para poder probar |
+| Sin `ADMIN_PASSWORD`, publicada en internet | **Cerrado**, con un aviso de que falta configurar la contraseña |
+| Con `ADMIN_PASSWORD` | Pide la contraseña, tanto en local como publicada |
+
+El formulario de los empleados (`/` y `/embed`) y el enlace del email del encargado (`/revisar/...`) **no piden contraseña**.
 
 ---
 
@@ -159,6 +186,37 @@ Para enviarlos de verdad:
 3. El empleado recibe un email con el resultado.
 
 También se puede aprobar o rechazar desde el panel `/admin`, en la sección **Solicitudes**.
+
+### Incrustar el formulario en la web del negocio (GoDaddy)
+
+La dirección `/embed` muestra solo el formulario y el panel *Mis vacaciones*, sin menú, sin enlace al panel de gestión y con fondo transparente.
+
+**Requisito:** la app tiene que estar publicada en internet con **HTTPS**. Los navegadores bloquean un `<iframe>` que apunte a `http://` o a `127.0.0.1` dentro de una web `https://`.
+
+Código para pegar en la web, sustituyendo la dirección por la de la app publicada:
+
+```html
+<iframe id="vacaciones" src="https://DIRECCION-DE-LA-APP/embed"
+        style="width:100%; height:1100px; border:0" title="Solicitar vacaciones"></iframe>
+<script>
+  // Opcional: ajusta la altura del iframe al contenido
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.tipo === "vacaciones-altura") {
+      document.getElementById("vacaciones").style.height = e.data.altura + "px";
+    }
+  });
+</script>
+```
+
+Dónde pegarlo según el producto de GoDaddy:
+
+| Producto | Dónde |
+|---|---|
+| **Websites + Marketing** (creador de páginas) | Añadir sección → **HTML** (*Insertar código*). Este editor mete el código dentro de su propio marco, así que el ajuste automático de altura puede no funcionar; en ese caso deja una altura fija generosa, por ejemplo `1400px`. |
+| **WordPress** | Bloque **HTML personalizado** en una página, y añadir esa página al menú. |
+| **Hosting con cPanel** | En cualquier página HTML. También se puede alojar la propia app ahí con *Setup Python App*. |
+
+El panel de gestión (`/admin`) y la página del encargado (`/revisar/...`) **no se pueden incrustar**: envían la cabecera `X-Frame-Options: DENY`, que impide que otra web los meta en un iframe para engañar al usuario.
 
 ---
 
@@ -233,7 +291,7 @@ Requisito: que la amiga pueda dar de alta autolavados **y empleados** desde la w
 
 ### Paso 8: Los correos no llegaban
 
-**Causa:** no existía el archivo `.env`, así que los emails solo se escribían en la consola. Se explicó cómo crear la contraseña de aplicación de Gmail y el `.env`. Ver [sección 4](#4-configurar-el-envío-de-correos).
+**Causa:** no existía el archivo `.env`, así que los emails solo se escribían en la consola. Se explicó cómo crear la contraseña de aplicación de Gmail y el `.env`. Ver [sección 4](#4-configuración-correo-y-contraseña-del-panel).
 
 ### Paso 9: Documentación
 
@@ -278,6 +336,24 @@ Se creó este `README.md` y el notebook `Documentacion.ipynb`.
 - Sección nueva **Días no disponibles** con la lista de fechas futuras bloqueadas. No muestra nombres de compañeros, por privacidad.
 - Se reutiliza `/api/ocupadas`, que ya marca con `propia` lo que es del propio empleado.
 
+### Paso 15: Contraseña del panel de gestión
+
+- Variables nuevas en `.env`: `ADMIN_PASSWORD` y `SECRET_KEY`. La contraseña no está en el código, así que la administradora la puede poner o cambiar sin tocarlo.
+- Pantalla de acceso `/admin/login` y salida `/admin/logout`.
+  - La contraseña se compara con `hmac.compare_digest`, que tarda lo mismo acierte o falle.
+  - Cada intento fallido espera 1 segundo, para frenar a quien intente adivinarla.
+- El decorador `@solo_admin` protege `/admin` y toda la API de gestión: autolavados, empleados, la lista de solicitudes y aprobar o rechazar. Sin sesión, las páginas redirigen al acceso y la API responde `401`.
+- **Sin contraseña configurada**, el panel solo se abre en local con `python app.py` (modo debug y petición desde `127.0.0.1`). Publicada en internet, queda cerrada con un aviso.
+- Cookie de sesión `HttpOnly` y `SameSite=Lax`, que pasa a `Secure` si `BASE_URL` empieza por `https://`. La sesión dura 12 horas.
+- Si la sesión caduca mientras el panel está abierto, el panel vuelve solo a la pantalla de acceso.
+
+### Paso 16: Versión para incrustar en la web del negocio
+
+- La web de la administradora está en **GoDaddy**. Se creó la ruta `/embed`, que usa la misma plantilla que `/` con `embed=True`: sin menú, sin enlace al panel y con fondo transparente.
+- La página avisa a la web contenedora de la altura que necesita, con `postMessage` y un `ResizeObserver`, para que el `<iframe>` crezca con el contenido.
+- `/admin` y `/revisar` envían `X-Frame-Options: DENY` para que no se puedan incrustar. `/embed` sí se puede.
+- El código para pegar y dónde hacerlo en cada producto de GoDaddy está en la [sección 5](#5-cómo-se-usa).
+
 ---
 
 ## 7. Base de datos
@@ -308,27 +384,30 @@ Para empezar con la base de datos vacía: para el servidor, borra `vacaciones.db
 
 ## 8. API
 
-Todas las respuestas son JSON. Los errores tienen la forma `{"error": "mensaje"}`.
+Las respuestas de `/api/...` son JSON. Los errores tienen la forma `{"error": "mensaje"}`. Las rutas marcadas con 🔒 necesitan haber iniciado sesión en el panel.
 
 | Método | Ruta | Para qué |
 |---|---|---|
 | GET | `/` | Formulario del empleado |
-| GET | `/admin` | Panel de gestión |
-| GET / POST | `/revisar/<token>` | Página de aprobación del encargado |
-| GET | `/api/autolavados` | Lista de autolavados |
-| POST | `/api/autolavados` | Crear `{nombre, email_encargado}` |
-| PUT | `/api/autolavados/<id>` | Editar `{nombre, email_encargado}` |
-| GET | `/api/empleados` | Lista de empleados con `dias_anuales` y `disponibles` del año actual |
-| POST | `/api/empleados` | Crear `{nombre, email, autolavado_id, dias_anuales?}` |
-| PUT | `/api/empleados/<id>` | Editar `{nombre, email, autolavado_id, activo, dias_anuales}` |
+| GET | `/embed` | Formulario sin menú, para incrustar con `<iframe>` |
+| GET | `/admin` 🔒 | Panel de gestión |
+| GET / POST | `/admin/login` | Pantalla de acceso al panel |
+| GET | `/admin/logout` | Cerrar sesión |
+| GET / POST | `/revisar/<token>` | Página de aprobación del encargado (protegida por el token) |
+| GET | `/api/autolavados` 🔒 | Lista de autolavados |
+| POST | `/api/autolavados` 🔒 | Crear `{nombre, email_encargado}` |
+| PUT | `/api/autolavados/<id>` 🔒 | Editar `{nombre, email_encargado}` |
+| GET | `/api/empleados` 🔒 | Lista de empleados con `dias_anuales` y `disponibles` del año actual |
+| POST | `/api/empleados` 🔒 | Crear `{nombre, email, autolavado_id, dias_anuales?}` |
+| PUT | `/api/empleados/<id>` 🔒 | Editar `{nombre, email, autolavado_id, activo, dias_anuales}` |
 | GET | `/api/identificar?email=` | Reconoce a un empleado activo y devuelve `{nombre, autolavado_id, autolavado}` |
 | GET | `/api/resumen?email=&anio=` | Panel *Mis vacaciones*: `{anio, dias_anuales, aprobados, pendientes, disponibles, solicitudes[]}` |
 | GET | `/api/ocupadas?autolavado=&email=` | Rangos ocupados del autolavado `[{from, to, estado, propia}]` |
-| GET | `/api/solicitudes` | Todas las solicitudes (sin el token) |
+| GET | `/api/solicitudes` 🔒 | Todas las solicitudes (sin el token) |
 | POST | `/api/solicitudes` | Crear `{email, fecha_inicio, fecha_fin}` |
-| POST | `/api/solicitudes/<id>/estado` | Resolver `{estado: "Aprobada" \| "Rechazada", comentario}` |
+| POST | `/api/solicitudes/<id>/estado` 🔒 | Resolver `{estado: "Aprobada" \| "Rechazada", comentario}` |
 
-Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404` no encontrado, `409` solapamiento, días insuficientes, nombre o email duplicado, o solicitud que ya no está pendiente.
+Códigos de respuesta: `400` dato no válido, `401` falta iniciar sesión en el panel, `403` email no dado de alta, `404` no encontrado, `409` solapamiento, días insuficientes, nombre o email duplicado, o solicitud que ya no está pendiente.
 
 ---
 
@@ -352,11 +431,14 @@ Códigos de respuesta: `400` dato no válido, `403` email no dado de alta, `404`
 |---|---|---|
 | `ERR_CONNECTION_REFUSED` | El servidor no está arrancado | Ejecuta `python app.py` y deja la terminal abierta |
 | La solicitud no se envía o sale "Error del servidor" | El servidor quedó con código antiguo tras un cambio | `Ctrl+C` y vuelve a arrancar |
-| No llegan los correos | Falta el `.env`, o la contraseña es la normal de Gmail | Ver [sección 4](#4-configurar-el-envío-de-correos) y mira en la carpeta de spam |
+| No llegan los correos | Falta el `.env`, o la contraseña es la normal de Gmail | Ver [sección 4](#4-configuración-correo-y-contraseña-del-panel) y mira en la carpeta de spam |
 | "Ese email no está dado de alta" | El empleado no existe o está inactivo | Dalo de alta o actívalo en `/admin` |
 | "Pides N días… solo te quedan M" | El empleado ya ha gastado sus días del año | Revisa sus días al año en `/admin` o rechaza alguna solicitud pendiente |
 | Gmail corta la conexión al iniciar sesión | Se está usando la contraseña normal de Gmail | Usa una contraseña de aplicación (ver sección 4) |
 | El enlace del email no abre en el móvil | La app está en `127.0.0.1` | Publicar la app y poner la dirección pública en `BASE_URL` |
+| El panel dice "está cerrado porque todavía no se ha configurado la contraseña" | La app está publicada (o sin modo debug) y falta `ADMIN_PASSWORD` | Añade `ADMIN_PASSWORD` al `.env` y reinicia |
+| Hay que volver a entrar al panel tras cada reinicio | Falta `SECRET_KEY` en el `.env` | Genera una y añádela (ver sección 4) |
+| El iframe en la web sale en blanco | La app no está publicada con `https://`, o se está incrustando `/admin` | Publica la app con HTTPS e incrusta `/embed` |
 | Error `Address already in use` | Ya hay otro servidor en el puerto 5000 | Cierra el otro servidor |
 
 ---

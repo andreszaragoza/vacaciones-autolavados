@@ -191,3 +191,19 @@ input.num-dias { width: 4.5rem; }
 .muestra-plana.pasado { background: #f0f0f0; border: 1px solid #ddd; }
 .estado-chip.no-disponible { background: #eeeeee; color: #616161; }
 .ayuda { margin: -.6rem 0 0; font-size: .82rem; color: #777; }
+
+/* Menú: cerrar sesión a la derecha */
+.nav-derecha { margin-left: auto; font-weight: 400 !important; opacity: .85; }
+
+/* Pantalla de acceso al panel */
+.tarjeta-login { margin: 3rem auto 0; max-width: 360px; }
+.tarjeta-login h1 { margin: 0; font-size: 1.3rem; }
+.form-login { display: flex; flex-direction: column; gap: 1rem; }
+.form-login .err, .tarjeta-login .err { margin: 0; }
+.ayuda-login { margin: 0; font-size: .9rem; color: #555; }
+.ayuda-login code { background: #f0f2f5; padding: .1rem .3rem; border-radius: 3px; }
+
+/* Versión incrustada (/embed): sin menú y con fondo transparente */
+body.embed { background: transparent; }
+body.embed main { max-width: none; padding: .5rem; }
+body.embed .tarjeta { box-shadow: 0 0 0 1px rgba(0,0,0,.08); }

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Acceso al panel{% endblock %}
+
+{% block content %}
+<div class="tarjeta tarjeta-login">
+  <h1>Panel de gestión</h1>
+
+  {% if sin_configurar %}
+    <p class="err">El panel está cerrado porque todavía no se ha configurado la contraseña.</p>
+    <p class="ayuda-login">Añade la línea <code>ADMIN_PASSWORD=tu-contraseña</code> al archivo <code>.env</code> y reinicia la aplicación.</p>
+  {% else %}
+    <form method="post" class="form-login">
+      <label>Contraseña
+        <input name="password" type="password" required autofocus autocomplete="current-password">
+      </label>
+      {% if fallo %}<p class="err">Contraseña incorrecta.</p>{% endif %}
+      <button type="submit">Entrar</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}
