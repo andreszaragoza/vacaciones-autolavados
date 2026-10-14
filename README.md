@@ -94,6 +94,39 @@ pip install -r requirements.txt
 python app.py
 ```
 
+### Publicar en PythonAnywhere
+
+La app queda en `https://USUARIO.pythonanywhere.com`, con HTTPS incluido. El plan gratuito sirve.
+
+1. **Descargar el código.** En **Consoles**, abre una consola **Bash**:
+   ```bash
+   git clone https://github.com/andreszaragoza/vacaciones-autolavados.git
+   cd vacaciones-autolavados
+   mkvirtualenv --python=python3.10 vacaciones
+   pip install -r requirements.txt
+   ```
+   Si el repositorio es privado, git pide usuario y contraseña. En la contraseña hay que poner un *token* de GitHub, no la contraseña normal.
+2. **Crear el `.env`** con `nano .env`. Usa los mismos campos que en la [sección 4](#4-configuración-correo-y-contraseña-del-panel), con estos dos cambios:
+   - `BASE_URL=https://USUARIO.pythonanywhere.com`
+   - **`ADMIN_PASSWORD` es obligatoria**: sin ella, el panel publicado queda cerrado.
+3. **Crear la web app.** En la pestaña **Web**: *Add a new web app* → **Manual configuration** (no "Flask") → **Python 3.10**.
+4. **Configurarla** en la misma página:
+   - **Source code:** `/home/USUARIO/vacaciones-autolavados`
+   - **Virtualenv:** `/home/USUARIO/.virtualenvs/vacaciones`
+   - En **WSGI configuration file**, sustituye todo el contenido por:
+     ```python
+     import sys
+     ruta = "/home/USUARIO/vacaciones-autolavados"
+     if ruta not in sys.path:
+         sys.path.insert(0, ruta)
+     from app import app as application
+     ```
+5. Pulsa **Reload** y abre la dirección. La base de datos empieza vacía: añade los autolavados y los empleados en `/admin`.
+
+**Para actualizar la app más adelante:** en la consola Bash, ejecuta `cd vacaciones-autolavados && git pull` y pulsa **Reload** en la pestaña Web.
+
+En el plan gratuito hay que pulsar **"Run until 3 months from today"** en la pestaña Web al menos una vez cada 3 meses, o la app se apaga. Si algo falla, el motivo aparece en el **Error log** de la pestaña Web.
+
 ---
 
 ## 4. Configuración: correo y contraseña del panel
@@ -257,7 +290,7 @@ Requisito: la amiga tiene varios autolavados. Las vacaciones solo deben chocar d
 - Tabla nueva `autolavados` (nombre y email del encargado). La tabla `solicitudes` gana `autolavado_id` y `token`.
 - **Migración automática**: si la base de datos es de la versión anterior, `init_db()` añade las columnas que faltan sin perder datos.
 - La comprobación de solapamiento y `/api/ocupadas` filtran por autolavado.
-- **Emails** con `smtplib`. La configuración se lee del `.env` con `python-dotenv`. Se envían en segundo plano para que el formulario no se quede esperando. Sin `.env`, se escriben en la consola.
+- **Emails** con `smtplib`. La configuración se lee del `.env` con `python-dotenv`. Al principio se enviaban en segundo plano; en el paso 17 se cambió a envío directo. Sin `.env`, se escriben en la consola.
 - Cada solicitud tiene un **token aleatorio**. El email al encargado incluye el enlace `/revisar/<token>`, donde puede aprobar o rechazar.
   - La acción se hace con un formulario `POST`, no al abrir el enlace, para que los antivirus o las vistas previas del correo no aprueben solicitudes por accidente.
 - Al resolver la solicitud se envía un email al empleado.
@@ -353,6 +386,12 @@ Se creó este `README.md` y el notebook `Documentacion.ipynb`.
 - La página avisa a la web contenedora de la altura que necesita, con `postMessage` y un `ResizeObserver`, para que el `<iframe>` crezca con el contenido.
 - `/admin` y `/revisar` envían `X-Frame-Options: DENY` para que no se puedan incrustar. `/embed` sí se puede.
 - El código para pegar y dónde hacerlo en cada producto de GoDaddy está en la [sección 5](#5-cómo-se-usa).
+
+### Paso 17: Preparar la publicación en PythonAnywhere
+
+- **Problema:** los emails se enviaban en un hilo en segundo plano (`threading.Thread`), y PythonAnywhere no permite hilos en las apps web. Allí los correos se habrían perdido sin dar ningún error.
+- **Solución:** el envío ahora es **directo**. El formulario tarda 1 o 2 segundos más al enviar una solicitud. Si el envío falla, el error se anota en el log y la solicitud se guarda igualmente.
+- Se añadió la guía de publicación en la [sección 3](#3-instalación-y-arranque).
 
 ---
 

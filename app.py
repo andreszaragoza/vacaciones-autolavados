@@ -4,7 +4,6 @@ import re
 import secrets
 import smtplib
 import sqlite3
-import threading
 import time
 from datetime import date, timedelta
 from email.message import EmailMessage
@@ -183,8 +182,10 @@ def enviar_email(destino, asunto, cuerpo):
               f"Para: {destino}\nAsunto: {asunto}\n\n{cuerpo}\n"
               f"=====================================================\n", flush=True)
         return
-    # En segundo plano para que el formulario no espere al servidor de correo
-    threading.Thread(target=_enviar, args=(msg,), daemon=True).start()
+    # Envío directo, sin hilos: PythonAnywhere no permite hilos en las apps web
+    # y un envío en segundo plano se perdería. Tarda 1-2 s; si falla se anota
+    # en el log de errores y la solicitud se guarda igualmente.
+    _enviar(msg)
 
 
 def avisar_encargado(s):
